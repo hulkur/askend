@@ -1,0 +1,142 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Filter index{% endblock %}
+
+{% block body %}
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('filters', () => ({
+                open: false,
+                items: [],
+                data: {
+                    id: null,
+                    name: '',
+                    criteria: [],
+                },
+                error: null,
+
+                async init() {
+                    let response = await fetch('/get');
+                    if (response.ok)
+                        this.items = await response.json();
+                    else
+                        alert('Error loading filters');
+                },
+
+                toggle() {
+                    this.open = ! this.open
+                },
+
+                create() {
+                    this.open = true;
+                },
+
+                edit(i) {
+                    this.data.id = this.items[i].id;
+                    this.data.name = this.items[i].name;
+                    this.data.criteria = this.items[i].criteria;
+                    this.open = true;
+                },
+
+                async save() {
+                    if (! this.data.criteria.length) {
+                        this.error = 'At least one criteria has to be set.'
+                        return;
+                    }
+
+                    let response = await fetch(this.data.id ? '/'+this.data.id+'/put' : '/new', {
+                        method: 'POST',
+                        body: JSON.stringify({name: this.data.name, criteria: this.data.criteria}),
+                        headers: {'Content-type': 'application/json; charset=UTF-8'},
+                    });
+                    console.log(response.status);
+                    if (response.ok) {
+                        this.data = {id: null, name: '', criteria: []};
+                        this.error = null;
+                        this.open = false;
+                        window.location.reload();
+                    } else {
+                        console.log(await response.json());
+                    }
+                },
+
+                cancel() {
+                    this.data = {id: null, name: '', criteria: []};
+                    this.error = null;
+                    this.open = false;
+                }
+            }))
+        })
+    </script>
+    <div class="flex justify-center">
+        <div class=" p-5 m-5 rounded-xl bg-white" x-data="filters">
+            <table class="table-auto">
+                <caption>Filters</caption>
+                <thead class="bg-gray-300">
+                <tr>
+                    <th class="p-2">Id</th>
+                    <th class="p-2">Name</th>
+                    <th class="p-2">
+                        <a class="text-blue-500 underline hover:text-blue-800" @click="create()">New</a>
+                    </th>
+                </tr>
+                </thead>
+                <tbody>
+                <template x-for="(item, i) in items">
+                    <tr>
+                        <td class="p-2" x-text="item.id"></td>
+                        <td class="p-2" x-text="item.name"></td>
+                        <td class="p-2">
+                            <button class="border px-3 py-1 text-blue-500 hover:text-blue-800" @click="edit(i)">edit</button>
+
+                            <form method="post" :action="'/'+item.id+'/delete'" onsubmit="return confirm('Are you sure you want to delete this item?');">
+                                <button class="border px-3 py-1 bg-red-500 text-white hover:bg-red-800">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                </template>
+                </tbody>
+            </table>
+            <div x-show="open" x-cloak class="fixed flex w-full h-full top-0 right-0 items-center justify-center bg-stone-400/80">
+                <form class="bg-white max-h-full" @submit.prevent="save" action="">
+                    <div class="bg-cyan-300 py-2 px-5 text-white flex justify-between">
+                        Filter
+                        <div @click="cancel()" class="cursor-pointer">X</div>
+                    </div>
+                    <div class="p-5 grid grid-cols-5 cap-y-2">
+                        <label for="name">Name</label>
+                        <input type="text" id="name" x-model="data.name" class="border col-span-4" required>
+                        <div class="mt-5">Criteria</div>
+                        <div class="col-span-4 mt-5 overflow-y-scroll">
+                            <template x-for="(c,i) in data.criteria">
+                                <div class="mb-2">
+                                    <select x-model="c.type" class="border">
+                                        <option value="amount">Amount</option>
+                                        <option value="date">Date</option>
+                                        <option value="title">Title</option>
+                                    </select>
+                                    <select x-model="c.op" class="border" required>
+                                        <option value="">---</option>
+                                        <option value="lt">Less than</option>
+                                        <option value="eq">Equals</option>
+                                        <option value="gt">More than</option>
+                                    </select>
+                                    <input :type="c.type=='date' ? 'date' : 'text'" x-model="c.value" class="border" required>
+                                    <button @click="data.criteria.splice(i,1)" type="button" class="bg-red-500 px-2 py-1 text-white font-bold cursor-pointer">X</button>
+                                </div>
+                            </template>
+                            <div class="flex justify-center">
+                                <button type="button" @click="data.criteria.push({type:'amount',op:null,value:''})" class="cursor-pointer">Add criteria</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div x-text="error" class="text-red-500 mx-5"></div>
+                    <div class="flex justify-around p-5">
+                        <button @click="cancel()" type="button" class="bg-gray-300 px-4 py-2 cursor-pointer">Cancel</button>
+                        <button type="submit" class="bg-green-300 px-4 py-2 cursor-pointer">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endblock %}
