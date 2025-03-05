@@ -8,6 +8,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\Session\SessionInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -15,17 +16,42 @@ use Symfony\Component\Validator\Validation;
 
 final class FilterController extends AbstractController
 {
-    #[Route('/', name: 'app_filter_index', methods: ['GET'])]
-    public function index(FilterRepository $filterRepository): Response
+    private function checkToken($request, $session): bool
     {
+        $secret = $this->getParameter('token');
+        $token = $session->get('token');
+
+        if ($token && $token === $secret) {
+            return true;
+        }
+
+        if ($request->get('token') === $secret) {
+            $session->set('token', $secret);
+            return true;
+        }
+
+        return false;
+    }
+
+    #[Route('/', name: 'app_filter_index', methods: ['GET'])]
+    public function index(Request $request, FilterRepository $filterRepository, SessionInterface $session): Response
+    {
+        if (!$this->checkToken($request, $session)) {
+            return new Response(status: 403);
+        }
+
         return $this->render('filter/index.html.twig', [
             'filters' => $filterRepository->findAll(),
         ]);
     }
 
     #[Route('/get', name: 'app_filter_json',methods: ['GET'])]
-    public function list(FilterRepository $filterRepository, SerializerInterface $serializer)
+    public function list(Request $request, FilterRepository $filterRepository, SerializerInterface $serializer, SessionInterface $session)
     {
+        if (!$this->checkToken($request, $session)) {
+            return new Response(status: 403);
+        }
+
         return new Response(
             $serializer->serialize($filterRepository->findAll(), 'json'),
             headers: ['content-type' => 'application/json']
@@ -35,8 +61,13 @@ final class FilterController extends AbstractController
     #[Route('/new', name: 'app_filter_new', methods: ['POST'])]
     public function store(
         Request $request,
-        EntityManagerInterface $entityManager
+        EntityManagerInterface $entityManager,
+        SessionInterface $session
     ): Response {
+        if (!$this->checkToken($request, $session)) {
+            return new Response(status: 403);
+        }
+
         $data = $request->toArray();
 
         $validator = Validation::createValidator();
@@ -63,8 +94,12 @@ final class FilterController extends AbstractController
     }
 
     #[Route('/{id}/put', name: 'app_filter_edit', methods: ['POST'])]
-    public function update(Request $request, Filter $filter, EntityManagerInterface $entityManager): Response
+    public function update(Request $request, Filter $filter, EntityManagerInterface $entityManager, SessionInterface $session): Response
     {
+        if (!$this->checkToken($request, $session)) {
+            return new Response(status: 403);
+        }
+
         $data = $request->toArray();
 
         $validator = Validation::createValidator();
@@ -101,8 +136,12 @@ final class FilterController extends AbstractController
     }
 
     #[Route('/{id}/delete', name: 'app_filter_delete', methods: ['POST'])]
-    public function delete(Request $request, Filter $filter, EntityManagerInterface $entityManager): Response
+    public function delete(Request $request, Filter $filter, EntityManagerInterface $entityManager, SessionInterface $session): Response
     {
+        if (!$this->checkToken($request, $session)) {
+            return new Response(status: 403);
+        }
+
         $entityManager->remove($filter);
         $entityManager->flush();
 
